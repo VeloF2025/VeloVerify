@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeloVerify Debug - File Upload Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .drop-zone {
+            border: 3px dashed #3498db;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: linear-gradient(45deg, #f8f9fa 0%, #e9ecef 100%);
+            margin-bottom: 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #2980b9;
+            background: linear-gradient(45deg, #e8f4fd 0%, #d1ecf1 100%);
+            transform: translateY(-2px);
+        }
+
+        .drop-zone i {
+            font-size: 3em;
+            color: #3498db;
+            margin-bottom: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message, .success-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: 600;
+            display: none;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            border: 1px solid #fcc;
+        }
+
+        .success-message {
+            background: #efe;
+            color: #363;
+            border: 1px solid #cfc;
+        }
+
+        .debug-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .debug-log h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+            font-family: 'Segoe UI', sans-serif;
+        }
+
+        .file-info {
+            background: #e8f4fd;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .file-info h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .file-info p {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 VeloVerify Debug Mode</h1>
+            <p>Debug version to identify file upload issues</p>
+        </div>
+
+        <div class="main-content">
+            <div class="drop-zone" id="drop-zone">
+                <i>📁</i>
+                <h3>Drop CSV File Here</h3>
+                <p>or click to browse</p>
+                <input type="file" id="file-input" accept=".csv" style="display: none;">
+            </div>
+
+            <div class="file-info" id="file-info">
+                <h3>📄 File Information</h3>
+                <p><strong>Name:</strong> <span id="file-name">-</span></p>
+                <p><strong>Size:</strong> <span id="file-size">-</span></p>
+                <p><strong>Type:</strong> <span id="file-type">-</span></p>
+                <p><strong>Rows:</strong> <span id="file-rows">-</span></p>
+            </div>
+
+            <div class="error-message" id="error-message"></div>
+            <div class="success-message" id="success-message"></div>
+
+            <button class="btn" onclick="testFeatures()">🧪 Test Browser Features</button>
+            <button class="btn" onclick="testDropZone()">🎯 Test Drop Zone</button>
+            <button class="btn" onclick="clearDebugLog()">🗑️ Clear Log</button>
+            <button class="btn" id="process-btn" disabled onclick="simulateProcessing()">▶️ Process Data</button>
+
+            <div class="debug-log" id="debug-log">
+                <h3>🐛 Debug Log</h3>
+                <div id="log-content">Application starting...<br></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentFile = null;
+        let originalData = [];
+
+        function debugLog(message, level = 'info') {
+            const logContent = document.getElementById('log-content');
+            const timestamp = new Date().toLocaleTimeString();
+            const levelIcon = {
+                'info': 'ℹ️',
+                'success': '✅',
+                'error': '❌',
+                'warning': '⚠️'
+            };
+            
+            const logEntry = `[${timestamp}] ${levelIcon[level] || 'ℹ️'} ${message}<br>`;
+            logContent.innerHTML += logEntry;
+            logContent.scrollTop = logContent.scrollHeight;
+            
+            console.log(`[VeloVerify Debug] ${message}`);
+        }
+
+        function clearDebugLog() {
+            document.getElementById('log-content').innerHTML = 'Debug log cleared.<br>';
+        }
+
+        function testFeatures() {
+            debugLog('Testing browser features...', 'info');
+            
+            // Test File API
+            if (window.File && window.FileReader && window.FileList && window.Blob) {
+                debugLog('File API: Supported ✅', 'success');
+            } else {
+                debugLog('File API: NOT SUPPORTED ❌', 'error');
+            }
+            
+            // Test Drag and Drop API
+            if ('draggable' in document.createElement('div')) {
+                debugLog('Drag & Drop API: Supported ✅', 'success');
+            } else {
+                debugLog('Drag & Drop API: NOT SUPPORTED ❌', 'error');
+            }
+            
+            // Test protocol
+            debugLog(`Protocol: ${window.location.protocol}`, 'info');
+            debugLog(`Browser: ${navigator.userAgent.split(') ')[0]})`, 'info');
+        }
+
+        function testDropZone() {
+            debugLog('Testing drop zone elements...', 'info');
+            
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            
+            if (dropZone) {
+                debugLog('Drop zone element: Found ✅', 'success');
+                debugLog(`Drop zone dimensions: ${dropZone.offsetWidth}x${dropZone.offsetHeight}`, 'info');
+            } else {
+                debugLog('Drop zone element: NOT FOUND ❌', 'error');
+            }
+            
+            if (fileInput) {
+                debugLog('File input element: Found ✅', 'success');
+            } else {
+                debugLog('File input element: NOT FOUND ❌', 'error');
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('success-message').style.display = 'none';
+            debugLog(`Error: ${message}`, 'error');
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+            document.getElementById('error-message').style.display = 'none';
+            debugLog(`Success: ${message}`, 'success');
+            setTimeout(() => {
+                successDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        function updateFileInfo(file) {
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('file-size').textContent = `${(file.size / 1024).toFixed(2)} KB`;
+            document.getElementById('file-type').textContent = file.type || 'text/csv';
+            document.getElementById('file-info').style.display = 'block';
+        }
+
+        function parseCSV(csvText) {
+            debugLog('Parsing CSV data...', 'info');
+            const lines = csvText.split('\n').filter(line => line.trim());
+            const data = [];
+            
+            if (lines.length === 0) {
+                throw new Error('CSV file is empty');
+            }
+            
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            debugLog(`Found ${headers.length} columns: ${headers.slice(0, 5).join(', ')}${headers.length > 5 ? '...' : ''}`, 'info');
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+                if (values.length >= headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] || '';
+                    });
+                    data.push(row);
+                }
+            }
+            
+            debugLog(`Parsed ${data.length} data rows`, 'success');
+            return data;
+        }
+
+        function handleFile(file) {
+            debugLog(`File selected: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`, 'info');
+            
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showError('Please select a CSV file.');
+                return;
+            }
+
+            currentFile = file;
+            updateFileInfo(file);
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    debugLog('Reading file content...', 'info');
+                    const csv = e.target.result;
+                    originalData = parseCSV(csv);
+                    
+                    document.getElementById('file-rows').textContent = originalData.length;
+                    document.getElementById('process-btn').disabled = false;
+                    
+                    showSuccess(`File loaded successfully! Found ${originalData.length} rows.`);
+                } catch (error) {
+                    debugLog(`File parsing error: ${error.message}`, 'error');
+                    showError('Error reading file: ' + error.message);
+                }
+            };
+            
+            reader.onerror = function() {
+                debugLog('FileReader error occurred', 'error');
+                showError('Error reading file');
+            };
+            
+            debugLog('Starting file read...', 'info');
+            reader.readAsText(file);
+        }
+
+        function simulateProcessing() {
+            if (!currentFile || !originalData.length) {
+                showError('No file loaded');
+                return;
+            }
+            
+            debugLog('Simulating data processing...', 'info');
+            showSuccess(`Would process ${originalData.length} rows from ${currentFile.name}`);
+        }
+
+        function initFileHandling() {
+            debugLog('Initializing file handling...', 'info');
+            
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            
+            if (!dropZone || !fileInput) {
+                debugLog('ERROR: Drop zone or file input not found!', 'error');
+                return;
+            }
+            
+            // Click handler
+            dropZone.addEventListener('click', function(e) {
+                debugLog('Drop zone clicked', 'info');
+                fileInput.click();
+            });
+            
+            // Drag over handler
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.currentTarget.classList.add('dragover');
+                debugLog('Drag over detected', 'info');
+            });
+            
+            // Drag leave handler
+            dropZone.addEventListener('dragleave', function(e) {
+                e.currentTarget.classList.remove('dragover');
+                debugLog('Drag leave detected', 'info');
+            });
+            
+            // Drop handler
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.currentTarget.classList.remove('dragover');
+                debugLog('File drop detected', 'info');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    debugLog(`Dropped ${files.length} files`, 'info');
+                    handleFile(files[0]);
+                } else {
+                    debugLog('No files in drop event', 'warning');
+                }
+            });
+            
+            // File input change handler
+            fileInput.addEventListener('change', function(e) {
+                debugLog('File input changed', 'info');
+                if (e.target.files.length > 0) {
+                    debugLog(`Selected ${e.target.files.length} files`, 'info');
+                    handleFile(e.target.files[0]);
+                } else {
+                    debugLog('No files selected', 'warning');
+                }
+            });
+            
+            debugLog('File handling initialized successfully ✅', 'success');
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('DOM Content Loaded', 'info');
+            initFileHandling();
+            testFeatures();
+            debugLog('VeloVerify Debug initialized successfully! 🚀', 'success');
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .drop-zone {
+            border: 3px dashed #3498db;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .info {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: none;
+        }
+        .error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: none;
+        }
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>File Upload Test</h1>
+        <p>This simple test will help us diagnose file upload issues.</p>
+        
+        <div class="drop-zone" id="drop-zone">
+            <h3>📁 Drop CSV File Here</h3>
+            <p>or click to browse</p>
+            <input type="file" id="file-input" accept=".csv" style="display: none;">
+        </div>
+        
+        <button class="btn" onclick="document.getElementById('file-input').click()">
+            Choose File
+        </button>
+        
+        <button class="btn" onclick="testBrowserFeatures()">
+            Test Browser Features
+        </button>
+        
+        <button class="btn" onclick="clearLog()">
+            Clear Log
+        </button>
+        
+        <div class="info" id="info"></div>
+        <div class="error" id="error"></div>
+        
+        <div class="log" id="log">
+            <strong>Test Log:</strong><br>
+            Page loaded successfully.<br>
+        </div>
+    </div>
+
+    <script>
+        let currentFile = null;
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        function showInfo(message) {
+            const infoDiv = document.getElementById('info');
+            infoDiv.textContent = message;
+            infoDiv.style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            document.getElementById('info').style.display = 'none';
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '<strong>Test Log:</strong><br>Log cleared.<br>';
+        }
+        
+        function testBrowserFeatures() {
+            log('Testing browser features...');
+            
+            // Test File API
+            if (window.File && window.FileReader && window.FileList && window.Blob) {
+                log('✅ File API supported');
+            } else {
+                log('❌ File API not supported');
+            }
+            
+            // Test Drag and Drop API
+            if ('draggable' in document.createElement('div')) {
+                log('✅ Drag and Drop API supported');
+            } else {
+                log('❌ Drag and Drop API not supported');
+            }
+            
+            // Test if we're running from file:// protocol
+            if (window.location.protocol === 'file:') {
+                log('⚠️ Running from file:// protocol - some features may be limited');
+            } else {
+                log('✅ Running from ' + window.location.protocol);
+            }
+            
+            log('Browser: ' + navigator.userAgent);
+        }
+        
+        function handleFile(file) {
+            log(`File selected: ${file.name}`);
+            log(`File size: ${(file.size / 1024).toFixed(2)} KB`);
+            log(`File type: ${file.type}`);
+            log(`Last modified: ${new Date(file.lastModified).toLocaleString()}`);
+            
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showError('Please select a CSV file.');
+                log('❌ Not a CSV file');
+                return;
+            }
+            
+            currentFile = file;
+            showInfo(`File "${file.name}" loaded successfully!`);
+            
+            // Try to read the file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const lines = content.split('\n');
+                    log(`✅ File read successfully. ${lines.length} lines found.`);
+                    
+                    if (lines.length > 0) {
+                        log(`First line (header): ${lines[0].substring(0, 100)}...`);
+                    }
+                } catch (error) {
+                    log(`❌ Error reading file: ${error.message}`);
+                    showError('Error reading file: ' + error.message);
+                }
+            };
+            
+            reader.onerror = function() {
+                log('❌ Error reading file');
+                showError('Error reading file');
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        function initFileHandling() {
+            log('Initializing file handling...');
+            
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            
+            if (!dropZone || !fileInput) {
+                log('❌ Drop zone or file input not found');
+                return;
+            }
+            
+            // Click handler
+            dropZone.addEventListener('click', function() {
+                log('Drop zone clicked');
+                fileInput.click();
+            });
+            
+            // Drag over handler
+            dropZone.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                e.currentTarget.classList.add('dragover');
+                log('Drag over detected');
+            });
+            
+            // Drag leave handler
+            dropZone.addEventListener('dragleave', function(e) {
+                e.currentTarget.classList.remove('dragover');
+            });
+            
+            // Drop handler
+            dropZone.addEventListener('drop', function(e) {
+                e.preventDefault();
+                e.currentTarget.classList.remove('dragover');
+                log('File dropped');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                } else {
+                    log('❌ No files in drop event');
+                }
+            });
+            
+            // File input change handler
+            fileInput.addEventListener('change', function(e) {
+                log('File input changed');
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                } else {
+                    log('❌ No files selected');
+                }
+            });
+            
+            log('✅ File handling initialized');
+        }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            log('DOM loaded');
+            initFileHandling();
+            testBrowserFeatures();
+        });
+    </script>
+</body>
+</html> 

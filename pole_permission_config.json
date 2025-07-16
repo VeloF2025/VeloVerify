@@ -1,0 +1,228 @@
+{
+  "workflow_name": "Universal Data Processing - Pole Permission Status Change & Agent Tracking",
+  "description": "Comprehensive dataset processing for pole permission status tracking with universal design adaptable to any status type",
+  
+  "dataset_overview": {
+    "current_focus": "Pole Permission: Approved",
+    "universal_design_note": "This logic works for any status by changing the filter criteria in processing.status_filter",
+    "expected_totals": {
+      "total_entries": 5287,
+      "unique_poles": 3732,
+      "duplicate_entries_to_remove": 1555,
+      "date_range": "April 24, 2025 to July 10, 2025"
+    }
+  },
+
+  "column_mapping": {
+    "exact_required_columns": [
+      "Property ID",
+      "1map NAD ID", 
+      "Pole Number",
+      "Drop Number",
+      "Stand Number",
+      "Status",
+      "Flow Name Groups",
+      "Site",
+      "Sections",
+      "PONs",
+      "Location Address",
+      "Latitude",
+      "Longitude",
+      "Field Agent Name (pole permission)",
+      "Latitude & Longitude",
+      "lst_mod_by",
+      "lst_mod_dt"
+    ],
+    "column_requirements": {
+      "exact_match_required": true,
+      "ignore_extra_columns": true,
+      "display_order": "as_specified_above"
+    },
+    "universal_columns": {
+      "modifier_tracking": "lst_mod_by",
+      "date_tracking": "lst_mod_dt"
+    },
+    "validation_notes": {
+      "lat_long_column": "Note: actual column name has '&' character",
+      "agent_correspondence": "Field Agent Name should correspond to lst_mod_by email"
+    }
+  },
+
+  "processing_steps": {
+    "step_1_filtering": {
+      "name": "Enhanced Data Filtering",
+      "logic": {
+        "include_criteria": "Flow Name Groups contains 'Pole Permission: Approved'",
+        "exclude_criteria": "Flow Name Groups contains 'Home Sign Ups' AND does not contain 'Pole Permission: Approved'",
+        "note": "Many records have concatenated formats like 'Home Sign Ups: Approved & Installation Scheduled, Pole Permission: Approved'"
+      },
+      "filter_config": {
+        "status_filter": "Pole Permission: Approved",
+        "complex_flow_handling": true,
+        "case_sensitive": false
+      }
+    },
+
+    "step_2_quality_control": {
+      "name": "Data Quality Control",
+      "substeps": {
+        "2a_missing_poles": {
+          "action": "Remove rows where Pole Number is null/empty",
+          "destination_sheet": "No_Pole_Allocated",
+          "expected_count": 0
+        },
+        "2b_agent_validation": {
+          "action": "Check alignment between Field Agent Name and lst_mod_by email",
+          "destination_sheet": "Agent_Data_Mismatches",
+          "validation_rules": {
+            "email_format_check": true,
+            "name_email_correspondence": true
+          }
+        },
+        "2c_date_formats": {
+          "action": "Handle mixed date formats in lst_mod_dt",
+          "supported_formats": [
+            "ISO: 2025-07-10 16:16:48.371919+02",
+            "JavaScript: Fri Jul 11 2025 12:50:02 GMT+0200"
+          ],
+          "parsing_priority": "ISO first, then JavaScript fallback"
+        },
+        "2d_duplicate_removal": {
+          "action": "Remove duplicate pole numbers for target status",
+          "logic": "Keep ONLY the entry with earliest lst_mod_dt for each pole",
+          "destination_sheet": "Duplicate_Poles_Removed",
+          "expected_duplicates": 1555
+        }
+      }
+    },
+
+    "step_3_analysis": {
+      "name": "First Status Change Date Analysis",
+      "description": "After duplicate removal, remaining entries represent first time each pole achieved target status",
+      "universal_application": "This logic works for any status by changing filter criteria in step 1"
+    },
+
+    "step_4_time_based_analysis": {
+      "name": "Time-Based Analysis Options",
+      "options": {
+        "option_a": {
+          "name": "Complete Dataset (No Date Filtering)",
+          "sheets": ["All_First_Approvals"],
+          "expected_entries": 3732
+        },
+        "option_b": {
+          "name": "Monthly Breakdown",
+          "sheets": [
+            { "name": "First_Approvals_2025-04", "entries": 116 },
+            { "name": "First_Approvals_2025-05", "entries": 896 },
+            { "name": "First_Approvals_2025-06", "entries": 1814 },
+            { "name": "First_Approvals_2025-07", "entries": 906 }
+          ]
+        },
+        "option_c": {
+          "name": "Weekly Breakdown",
+          "note": "Weeks ending Sunday",
+          "sheets": [
+            { "name": "Week_Ending_2025-04-27", "entries": 1 },
+            { "name": "Week_Ending_2025-05-04", "entries": 205 },
+            { "name": "Week_Ending_2025-05-11", "entries": 249 },
+            { "name": "Week_Ending_2025-05-25", "entries": 1 },
+            { "name": "Week_Ending_2025-06-01", "entries": 647 },
+            { "name": "Week_Ending_2025-06-08", "entries": 1237, "note": "PEAK WEEK - 33% of all approvals!" },
+            { "name": "Week_Ending_2025-06-15", "entries": 317 },
+            { "name": "Week_Ending_2025-06-22", "entries": 42 },
+            { "name": "Week_Ending_2025-06-29", "entries": 127 },
+            { "name": "Week_Ending_2025-07-06", "entries": 616 },
+            { "name": "Week_Ending_2025-07-13", "entries": 290 }
+          ]
+        },
+        "option_d": {
+          "name": "Custom Date Range",
+          "description": "User-specified date range",
+          "sheet_template": [
+            "First_Approvals_[StartDate]-[EndDate]",
+            "First_Approvals_Before_[StartDate]", 
+            "First_Approvals_After_[EndDate]"
+          ]
+        }
+      }
+    },
+
+    "step_5_validation": {
+      "name": "Quality Control Validation",
+      "final_checks": [
+        "Total Check: Sum of all sheets = 5,287 original entries",
+        "Uniqueness Check: No pole number appears in multiple analysis sheets", 
+        "Date Integrity: All dates properly parsed and sorted",
+        "Completeness: All entries have valid pole numbers and dates",
+        "Agent Alignment: Verify Field Agent Name corresponds to lst_mod_by email",
+        "Status Consistency: Ensure all entries match target status filter criteria"
+      ]
+    }
+  },
+
+  "business_insights": {
+    "peak_activity": "June 2025 had highest first-time pole approvals (1,814 poles)",
+    "weekly_trends": {
+      "peak_week": "Week ending June 8: 1,237 poles (33% of all approvals!)",
+      "lowest_week": "Week ending June 22: 42 poles", 
+      "recovery_pattern": "Major surge in Week ending July 6: 616 poles (+385%)"
+    },
+    "duplicate_pattern": "1,048 poles have multiple approval entries, indicating significant re-processing"
+  },
+
+  "critical_success_factors": [
+    "Date Parsing: Handle both ISO and JavaScript date formats in lst_mod_dt",
+    "Flow Filtering: Correctly identify target status entries in complex concatenated fields",
+    "Duplicate Logic: Keep earliest date per pole per status (not latest)",
+    "Agent Tracking: Ensure Field Agent Name corresponds to lst_mod_by email", 
+    "Universal Design: Structure works for any status by changing filter criteria",
+    "Validation: Ensure 3,732 unique poles in final analysis",
+    "Flexibility: Choose appropriate time grouping based on business needs"
+  ],
+
+  "veloverify_config": {
+    "ui": {
+      "theme": "light",
+      "show_progress_details": true
+    },
+    "processing": {
+      "default_output_format": "excel",
+      "chunk_size": 10000,
+      "date_format_preference": "auto",
+      "encoding_detection": "auto"
+    },
+    "data_validation": {
+      "strict_column_checking": true,
+      "allow_missing_coordinates": false,
+      "min_pole_number_length": 1,
+      "validate_agent_email_format": true,
+      "duplicate_detection_method": "earliest_date",
+      "quality_control_level": "strict"
+    },
+    "export": {
+      "filename_format": "Pole_Permissions_Status_Analysis_{timestamp}",
+      "include_summary_sheet": true,
+      "include_qc_sheets": true,
+      "excel_formatting": "professional",
+      "create_backup_copies": true
+    },
+    "custom_processing": {
+      "status_filter_text": "Pole Permission: Approved",
+      "exclude_filter_text": "Home Sign Ups",
+      "time_grouping_option": "option_c",
+      "agent_validation_enabled": true,
+      "mixed_date_format_handling": true,
+      "universal_design_mode": true
+    }
+  },
+
+  "usage_instructions": {
+    "step_1": "Load this configuration template into VeloVerify",
+    "step_2": "Select your CSV file with pole permission data",
+    "step_3": "Choose time grouping option (A, B, C, or D)",
+    "step_4": "Run processing with enhanced validation enabled",
+    "step_5": "Review generated sheets and quality control reports",
+    "customization_note": "To adapt for different status types, modify 'status_filter_text' in custom_processing section"
+  }
+} 

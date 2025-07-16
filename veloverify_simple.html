@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeloVerify - CSV Processor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .title {
+            color: #366092;
+            font-size: 3em;
+            margin: 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+        }
+        .subtitle {
+            color: #666;
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+        .version {
+            background: #366092;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin: 20px 0;
+            border: 3px dashed #366092;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .upload-section:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+        .upload-section.dragover {
+            background: #d1ecf1;
+            border-color: #17a2b8;
+            transform: scale(1.02);
+        }
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 15px;
+            color: #366092;
+        }
+        .upload-text {
+            font-size: 1.3em;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .upload-subtext {
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .file-input {
+            display: none;
+        }
+        .btn {
+            background: #366092;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #285a7a;
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #545b62;
+        }
+        .results {
+            margin-top: 30px;
+            display: none;
+            animation: fadeIn 0.5s ease-in;
+        }
+        .results.show {
+            display: block;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        .details-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .section-title {
+            color: #366092;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+        .section-title::before {
+            content: "📊";
+            margin-right: 10px;
+        }
+        .columns-container {
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        .column-tag {
+            display: inline-block;
+            background: #e9ecef;
+            color: #495057;
+            padding: 5px 12px;
+            margin: 3px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            border: 1px solid #ced4da;
+        }
+        .column-tag.pole {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-color: #bee5eb;
+        }
+        .sample-data {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 300px;
+            overflow: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            text-align: center;
+            padding: 30px;
+            display: none;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #366092;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .features {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .feature-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #366092;
+        }
+        .feature-title {
+            font-weight: bold;
+            color: #366092;
+            margin-bottom: 5px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #666;
+            border-top: 1px solid #dee2e6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 class="title">🔍 VeloVerify</h1>
+            <p class="subtitle">Advanced Pole Permissions CSV Processor</p>
+            <span class="version">v1.1.0 Web Edition</span>
+        </div>
+
+        <div class="features">
+            <div class="section-title">✨ Features</div>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <div class="feature-title">Data Analysis</div>
+                    <div>Comprehensive CSV analysis and validation</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-title">Pole Detection</div>
+                    <div>Automatic detection of pole-related data</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-title">Quality Control</div>
+                    <div>Data quality checks and reporting</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-title">Browser-Based</div>
+                    <div>No installation required - works in any browser</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="upload-section" id="uploadArea">
+            <div class="upload-icon">📁</div>
+            <div class="upload-text">Upload Your CSV File</div>
+            <div class="upload-subtext">Drag and drop your file here, or click to browse</div>
+            <input type="file" id="fileInput" class="file-input" accept=".csv" />
+            <button class="btn" onclick="document.getElementById('fileInput').click()">
+                📂 Choose CSV File
+            </button>
+            <button class="btn btn-secondary" onclick="loadSampleData()">
+                🧪 Try Sample Data
+            </button>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <div>Processing your CSV file...</div>
+        </div>
+        
+        <div id="results" class="results">
+            <div id="alertContainer"></div>
+            
+            <div class="section-title">📊 Analysis Results</div>
+            <div id="statsGrid" class="stats-grid"></div>
+            
+            <div id="detailsContainer"></div>
+        </div>
+
+        <div class="footer">
+            <p><strong>VeloVerify Web Edition</strong> - Simplified CSV processor for pole permissions data</p>
+            <p>💡 This is a browser-based version with no dependencies required</p>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const results = document.getElementById('results');
+        const loading = document.getElementById('loading');
+        const statsGrid = document.getElementById('statsGrid');
+        const detailsContainer = document.getElementById('detailsContainer');
+        const alertContainer = document.getElementById('alertContainer');
+
+        // Drag and drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        function showAlert(message, type = 'success') {
+            alertContainer.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+        }
+
+        function showLoading() {
+            loading.style.display = 'block';
+            results.classList.remove('show');
+        }
+
+        function hideLoading() {
+            loading.style.display = 'none';
+        }
+
+        function handleFile(file) {
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                showAlert('⚠️ Please select a CSV file (.csv extension required)', 'error');
+                return;
+            }
+
+            showLoading();
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvContent = e.target.result;
+                processCSV(csvContent, file.name);
+            };
+            reader.onerror = function() {
+                hideLoading();
+                showAlert('❌ Error reading file. Please try again.', 'error');
+            };
+            reader.readAsText(file);
+        }
+
+        function processCSV(csvContent, fileName) {
+            try {
+                // Parse CSV content
+                const lines = csvContent.split('\n').filter(line => line.trim());
+                if (lines.length < 2) {
+                    throw new Error('CSV file appears to be empty or invalid');
+                }
+
+                // Get headers
+                const headers = parseCSVLine(lines[0]);
+                
+                // Parse data rows
+                const rows = [];
+                for (let i = 1; i < lines.length; i++) {
+                    const rowData = parseCSVLine(lines[i]);
+                    if (rowData.length === headers.length) {
+                        const rowObj = {};
+                        headers.forEach((header, index) => {
+                            rowObj[header] = rowData[index];
+                        });
+                        rows.push(rowObj);
+                    }
+                }
+
+                // Analyze data
+                const analysis = analyzeData(headers, rows, fileName);
+                displayResults(analysis);
+
+            } catch (error) {
+                hideLoading();
+                showAlert(`❌ Error processing CSV: ${error.message}`, 'error');
+            }
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            result.push(current.trim());
+            return result;
+        }
+
+        function analyzeData(headers, rows, fileName) {
+            const analysis = {
+                fileName: fileName,
+                totalRows: rows.length,
+                totalColumns: headers.length,
+                headers: headers,
+                poleColumns: [],
+                dateColumns: [],
+                polePermissionCount: 0,
+                sampleData: rows.slice(0, 5),
+                processedTime: new Date().toLocaleString()
+            };
+
+            // Find pole-related columns
+            analysis.poleColumns = headers.filter(header => 
+                header.toLowerCase().includes('pole')
+            );
+
+            // Find date-related columns
+            analysis.dateColumns = headers.filter(header => 
+                header.toLowerCase().includes('date') || 
+                header.toLowerCase().includes('time') ||
+                header.toLowerCase().includes('modified')
+            );
+
+            // Count pole permission entries
+            rows.forEach(row => {
+                Object.values(row).forEach(value => {
+                    if (value && value.toLowerCase().includes('pole permission')) {
+                        analysis.polePermissionCount++;
+                        return;
+                    }
+                });
+            });
+
+            return analysis;
+        }
+
+        function displayResults(analysis) {
+            hideLoading();
+
+            // Show success message
+            showAlert(`✅ Successfully processed "${analysis.fileName}"! Found ${analysis.polePermissionCount} pole permission entries in ${analysis.totalRows} total rows.`);
+
+            // Display statistics
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.totalRows.toLocaleString()}</div>
+                    <div class="stat-label">Total Rows</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.totalColumns}</div>
+                    <div class="stat-label">Columns</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.polePermissionCount}</div>
+                    <div class="stat-label">Pole Permissions</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${analysis.poleColumns.length}</div>
+                    <div class="stat-label">Pole Columns</div>
+                </div>
+            `;
+
+            // Display detailed information
+            let detailsHTML = '';
+
+            // Columns section
+            if (analysis.headers.length > 0) {
+                detailsHTML += `
+                    <div class="details-section">
+                        <div class="section-title">📋 All Columns (${analysis.headers.length})</div>
+                        <div class="columns-container">
+                            ${analysis.headers.map(header => {
+                                const isPole = analysis.poleColumns.includes(header);
+                                return `<span class="column-tag ${isPole ? 'pole' : ''}">${header}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Pole columns section
+            if (analysis.poleColumns.length > 0) {
+                detailsHTML += `
+                    <div class="details-section">
+                        <div class="section-title">🏗️ Pole-Related Columns</div>
+                        <div class="columns-container">
+                            ${analysis.poleColumns.map(col => `<span class="column-tag pole">${col}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Date columns section
+            if (analysis.dateColumns.length > 0) {
+                detailsHTML += `
+                    <div class="details-section">
+                        <div class="section-title">📅 Date/Time Columns</div>
+                        <div class="columns-container">
+                            ${analysis.dateColumns.map(col => `<span class="column-tag">${col}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Sample data section
+            if (analysis.sampleData.length > 0) {
+                detailsHTML += `
+                    <div class="details-section">
+                        <div class="section-title">📄 Sample Data (first 5 rows)</div>
+                        <div class="sample-data">
+                            ${JSON.stringify(analysis.sampleData, null, 2)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            detailsContainer.innerHTML = detailsHTML;
+            results.classList.add('show');
+        }
+
+        function loadSampleData() {
+            const sampleCSV = `Property ID,1map NAD ID,Pole Number,Status,Flow Name Groups,Site,Location Address,Latitude,Longitude,Field Agent Name (pole permission),lst_mod_by,lst_mod_dt
+PROP_0001,NAD_0001,POLE_0001,Active,Pole Permission: Approved,Site_1,"123 Main St, Test City",-26.2041,28.0473,Agent_1,user1@example.com,2024-01-15 10:30:00
+PROP_0002,NAD_0002,POLE_0002,Active,Home Sign Ups: Approved,Site_2,"456 Oak Ave, Test City",-26.2051,28.0483,Agent_2,user2@example.com,2024-01-16 11:15:00
+PROP_0003,NAD_0003,POLE_0003,Active,Pole Permission: Approved,Site_1,"789 Pine St, Test City",-26.2061,28.0493,Agent_1,user1@example.com,2024-01-17 09:45:00
+PROP_0004,NAD_0004,POLE_0004,Pending,Pole Permission: Approved,Site_3,"321 Elm Dr, Test City",-26.2071,28.0503,Agent_3,user3@example.com,2024-01-18 14:20:00
+PROP_0005,NAD_0005,POLE_0005,Active,Home Sign Ups: Approved,Site_2,"654 Birch Ln, Test City",-26.2081,28.0513,Agent_2,user2@example.com,2024-01-19 16:10:00`;
+
+            showLoading();
+            setTimeout(() => {
+                processCSV(sampleCSV, 'sample_pole_data.csv');
+            }, 1000);
+        }
+
+        // Show welcome message
+        window.addEventListener('load', () => {
+            showAlert('🎉 Welcome to VeloVerify Web! Upload a CSV file to analyze pole permissions data, or try the sample data.', 'success');
+        });
+    </script>
+</body>
+</html> 
