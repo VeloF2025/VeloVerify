@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeloCompare - File Comparison</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .upload-section h3 {
+            margin-top: 0;
+            color: #34495e;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            color: #7f8c8d;
+        }
+        input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+        }
+        .key-columns {
+            margin: 20px 0;
+        }
+        .key-columns input {
+            width: calc(100% - 20px);
+            padding: 8px;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            display: none;
+        }
+        .results.show {
+            display: block;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            padding: 10px;
+            border: 1px solid #e74c3c;
+            border-radius: 4px;
+            display: none;
+        }
+        .download-links {
+            margin-top: 15px;
+        }
+        .download-links a {
+            display: block;
+            margin: 5px 0;
+            color: #3498db;
+            text-decoration: none;
+        }
+        .download-links a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>VeloCompare</h1>
+        <div class="upload-section">
+            <h3>Sheet A</h3>
+            <input type="file" id="fileA" accept=".xlsx,.xls,.csv" required>
+            
+            <h3>Sheet B</h3>
+            <input type="file" id="fileB" accept=".xlsx,.xls,.csv" required>
+        </div>
+
+        <div class="key-columns">
+            <label>Key Columns (optional, comma-separated):</label>
+            <input type="text" id="keyColumns" placeholder="e.g., Property ID">
+        </div>
+
+        <button onclick="compareFiles()">Compare Files</button>
+
+        <div class="error" id="errorMessage"></div>
+
+        <div class="results" id="results">
+            <h3>Comparison Results</h3>
+            <p>Total rows in File A: <span id="rowsA">0</span></p>
+            <p>Total rows in File B: <span id="rowsB">0</span></p>
+            <p>Rows only in File A: <span id="uniqueA">0</span></p>
+            <p>Rows only in File B: <span id="uniqueB">0</span></p>
+            <p>Key columns used: <span id="keyCols"></span></p>
+            
+            <div class="download-links">
+                <h4>Download Results:</h4>
+                <a href="#" id="downloadA" download="unique_to_file_a.xlsx">Rows only in File A</a>
+                <a href="#" id="downloadB" download="unique_to_file_b.xlsx">Rows only in File B</a>
+                <a href="#" id="downloadSummary" download="comparison_summary.xlsx">Comparison Summary</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        let data;
+                        if (file.name.toLowerCase().endsWith('.csv')) {
+                            // Parse CSV
+                            data = XLSX.read(e.target.result, {type: 'binary'});
+                        } else {
+                            // Parse Excel
+                            data = XLSX.read(e.target.result, {type: 'binary'});
+                        }
+                        
+                        // Convert to array of objects
+                        const sheet = data.Sheets[data.SheetNames[0]];
+                        const jsonData = XLSX.utils.sheet_to_json(sheet);
+                        resolve(jsonData);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                
+                reader.onerror = function(error) {
+                    reject(error);
+                };
+                
+                reader.readAsBinaryString(file);
+            });
+        }
+
+        function compareArrays(arrayA, arrayB, keyColumns) {
+            // If no key columns specified, use all common columns
+            if (!keyColumns || keyColumns.length === 0) {
+                const columnsA = Object.keys(arrayA[0] || {});
+                const columnsB = Object.keys(arrayB[0] || {});
+                keyColumns = columnsA.filter(col => columnsB.includes(col));
+            }
+
+            // Create key for each row
+            function getRowKey(row) {
+                return keyColumns.map(col => String(row[col] || '')).join('-');
+            }
+
+            // Get unique keys
+            const keysA = new Set(arrayA.map(getRowKey));
+            const keysB = new Set(arrayB.map(getRowKey));
+
+            // Find unique rows
+            const uniqueToA = arrayA.filter(row => !keysB.has(getRowKey(row)));
+            const uniqueToB = arrayB.filter(row => !keysA.has(getRowKey(row)));
+
+            return {
+                uniqueToA,
+                uniqueToB,
+                keyColumns,
+                totalA: arrayA.length,
+                totalB: arrayB.length
+            };
+        }
+
+        function downloadExcel(data, filename) {
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+            
+            const wbout = XLSX.write(wb, {bookType:'xlsx', type:'binary'});
+            
+            // Convert to Blob and create download link
+            const blob = new Blob([s2ab(wbout)], {type: 'application/octet-stream'});
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            
+            URL.revokeObjectURL(url);
+        }
+
+        function s2ab(s) {
+            const buf = new ArrayBuffer(s.length);
+            const view = new Uint8Array(buf);
+            for (let i=0; i<s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
+            return buf;
+        }
+
+        async function compareFiles() {
+            hideError();
+            const fileA = document.getElementById('fileA').files[0];
+            const fileB = document.getElementById('fileB').files[0];
+            const keyColumnsInput = document.getElementById('keyColumns').value;
+
+            if (!fileA || !fileB) {
+                showError('Please select both files for comparison');
+                return;
+            }
+
+            try {
+                // Read both files
+                const [dataA, dataB] = await Promise.all([
+                    readFile(fileA),
+                    readFile(fileB)
+                ]);
+
+                // Get key columns
+                const keyColumns = keyColumnsInput ? keyColumnsInput.split(',').map(k => k.trim()) : [];
+
+                // Compare data
+                const results = compareArrays(dataA, dataB, keyColumns);
+
+                // Update UI
+                document.getElementById('rowsA').textContent = results.totalA;
+                document.getElementById('rowsB').textContent = results.totalB;
+                document.getElementById('uniqueA').textContent = results.uniqueToA.length;
+                document.getElementById('uniqueB').textContent = results.uniqueToB.length;
+                document.getElementById('keyCols').textContent = results.keyColumns.join(', ');
+                document.getElementById('results').classList.add('show');
+
+                // Set up download links
+                document.getElementById('downloadA').onclick = () => downloadExcel(results.uniqueToA, 'unique_to_file_a.xlsx');
+                document.getElementById('downloadB').onclick = () => downloadExcel(results.uniqueToB, 'unique_to_file_b.xlsx');
+                
+                // Create and set up summary download
+                const summary = [{
+                    'Total Rows in File A': results.totalA,
+                    'Total Rows in File B': results.totalB,
+                    'Rows Only in File A': results.uniqueToA.length,
+                    'Rows Only in File B': results.uniqueToB.length,
+                    'Key Columns Used': results.keyColumns.join(', ')
+                }];
+                document.getElementById('downloadSummary').onclick = () => downloadExcel(summary, 'comparison_summary.xlsx');
+
+            } catch (error) {
+                showError('Error comparing files: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 

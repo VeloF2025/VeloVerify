@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>VeloVerify File Comparison Report</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .file-inputs {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .report-section {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .missing-row {
+            border-left: 4px solid #ff6b6b;
+            padding: 10px;
+            margin: 10px 0;
+            background: #fff5f5;
+        }
+        .property-details {
+            margin-left: 20px;
+            font-family: monospace;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .download-links {
+            margin-top: 20px;
+        }
+        .download-links a {
+            display: inline-block;
+            margin-right: 10px;
+            padding: 8px 15px;
+            background: #2196F3;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .summary {
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>VeloVerify File Comparison Report</h1>
+    
+    <div class="container">
+        <div class="file-inputs">
+            <div>
+                <label for="file1">First File:</label>
+                <input type="file" id="file1" accept=".csv,.xlsx,.xls">
+            </div>
+            <div>
+                <label for="file2">Second File:</label>
+                <input type="file" id="file2" accept=".csv,.xlsx,.xls">
+            </div>
+        </div>
+        <button onclick="compareFiles()">Generate Report</button>
+    </div>
+
+    <div id="report" style="display: none;">
+        <div class="report-section">
+            <h2>Summary</h2>
+            <div id="summary"></div>
+        </div>
+        
+        <div class="report-section">
+            <h2>Missing in Second File</h2>
+            <div id="missingInSecond"></div>
+        </div>
+        
+        <div class="report-section">
+            <h2>Missing in First File</h2>
+            <div id="missingInFirst"></div>
+        </div>
+
+        <div class="download-links">
+            <a href="#" id="downloadMissingFirst" download="missing_in_first.csv">Download Missing in First (CSV)</a>
+            <a href="#" id="downloadMissingSecond" download="missing_in_second.csv">Download Missing in Second (CSV)</a>
+            <a href="#" id="downloadFullReport" download="full_comparison_report.csv">Download Full Report (CSV)</a>
+        </div>
+    </div>
+
+    <script>
+        function readFile(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = e.target.result;
+                        const workbook = XLSX.read(data, { type: 'binary' });
+                        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                        const rows = XLSX.utils.sheet_to_json(firstSheet);
+                        resolve(rows);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsBinaryString(file);
+            });
+        }
+
+        function analyzeRowDifferences(row1, row2) {
+            const differences = [];
+            for (const key in row1) {
+                if (row2[key] !== row1[key]) {
+                    differences.push({
+                        field: key,
+                        value1: row1[key],
+                        value2: row2[key]
+                    });
+                }
+            }
+            return differences;
+        }
+
+        function generateExplanation(row, otherFileRows) {
+            let explanation = "";
+            
+            // Check for similar Property IDs (typos, formatting)
+            const propertyId = row['Property ID']?.toString();
+            if (propertyId) {
+                const similarIds = otherFileRows
+                    .map(r => ({
+                        id: r['Property ID']?.toString(),
+                        similarity: calculateSimilarity(propertyId, r['Property ID']?.toString())
+                    }))
+                    .filter(s => s.similarity > 0.8 && s.similarity < 1)
+                    .map(s => s.id);
+
+                if (similarIds.length > 0) {
+                    explanation += `\nPossible similar Property IDs found: ${similarIds.join(', ')}. This might be due to typos or formatting differences.`;
+                }
+            }
+
+            // Check for data completeness
+            const emptyFields = Object.entries(row)
+                .filter(([_, value]) => !value || value.toString().trim() === '')
+                .map(([key]) => key);
+            
+            if (emptyFields.length > 0) {
+                explanation += `\nEmpty or missing fields: ${emptyFields.join(', ')}`;
+            }
+
+            return explanation || "\nNo specific issues detected - row might have been intentionally excluded or represents a genuine difference.";
+        }
+
+        function calculateSimilarity(str1, str2) {
+            if (!str1 || !str2) return 0;
+            const len1 = str1.length;
+            const len2 = str2.length;
+            const matrix = Array(len1 + 1).fill().map(() => Array(len2 + 1).fill(0));
+
+            for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+            for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+            for (let i = 1; i <= len1; i++) {
+                for (let j = 1; j <= len2; j++) {
+                    const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j - 1] + cost
+                    );
+                }
+            }
+
+            return 1 - (matrix[len1][len2] / Math.max(len1, len2));
+        }
+
+        async function compareFiles() {
+            try {
+                const file1 = document.getElementById('file1').files[0];
+                const file2 = document.getElementById('file2').files[0];
+
+                if (!file1 || !file2) {
+                    alert('Please select both files');
+                    return;
+                }
+
+                const rows1 = await readFile(file1);
+                const rows2 = await readFile(file2);
+
+                const missingInSecond = [];
+                const missingInFirst = [];
+
+                // Find rows missing in second file
+                for (const row1 of rows1) {
+                    const match = rows2.find(row2 => row2['Property ID'] === row1['Property ID']);
+                    if (!match) {
+                        missingInSecond.push({
+                            row: row1,
+                            explanation: generateExplanation(row1, rows2)
+                        });
+                    }
+                }
+
+                // Find rows missing in first file
+                for (const row2 of rows2) {
+                    const match = rows1.find(row1 => row1['Property ID'] === row2['Property ID']);
+                    if (!match) {
+                        missingInFirst.push({
+                            row: row2,
+                            explanation: generateExplanation(row2, rows1)
+                        });
+                    }
+                }
+
+                // Display results
+                document.getElementById('report').style.display = 'block';
+                
+                // Summary
+                const summaryHtml = `
+                    <div class="summary">
+                        Total rows in first file: ${rows1.length}<br>
+                        Total rows in second file: ${rows2.length}<br>
+                        Rows missing in second file: ${missingInSecond.length}<br>
+                        Rows missing in first file: ${missingInFirst.length}
+                    </div>
+                `;
+                document.getElementById('summary').innerHTML = summaryHtml;
+
+                // Display missing rows with explanations
+                document.getElementById('missingInSecond').innerHTML = missingInSecond
+                    .map(item => {
+                        const selectedFields = {
+                            'Property ID': item.row['Property ID'] || '',
+                            '1map NAD ID': item.row['1map NAD ID'] || '',
+                            'Site': item.row['Site'] || '',
+                            'lst_mod_by': item.row['lst_mod_by'] || '',
+                            'lst_mod_dt': item.row['lst_mod_dt'] || '',
+                            'date_status_changed': item.row['date_status_changed'] || '',
+                            'Latitude': item.row['Latitude'] || '',
+                            'Longitude': item.row['Longitude'] || ''
+                        };
+                        return `
+                        <div class="missing-row">
+                            <div class="property-details">
+                                ${Object.entries(selectedFields)
+                                    .map(([key, value]) => `${key}: ${value}`)
+                                    .join('<br>')}
+                            </div>
+                            <strong>Explanation:</strong>${item.explanation}
+                        </div>
+                    `}).join('');
+
+                document.getElementById('missingInFirst').innerHTML = missingInFirst
+                    .map(item => {
+                        const selectedFields = {
+                            'Property ID': item.row['Property ID'] || '',
+                            '1map NAD ID': item.row['1map NAD ID'] || '',
+                            'Site': item.row['Site'] || '',
+                            'lst_mod_by': item.row['lst_mod_by'] || '',
+                            'lst_mod_dt': item.row['lst_mod_dt'] || '',
+                            'date_status_changed': item.row['date_status_changed'] || '',
+                            'Latitude': item.row['Latitude'] || '',
+                            'Longitude': item.row['Longitude'] || ''
+                        };
+                        return `
+                        <div class="missing-row">
+                            <div class="property-details">
+                                ${Object.entries(selectedFields)
+                                    .map(([key, value]) => `${key}: ${value}`)
+                                    .join('<br>')}
+                            </div>
+                            <strong>Explanation:</strong>${item.explanation}
+                        </div>
+                    `}).join('');
+
+                // Prepare download files
+                const missingInFirstCsv = convertToCSV(missingInFirst.map(item => item.row));
+                const missingInSecondCsv = convertToCSV(missingInSecond.map(item => item.row));
+                
+                // Generate full report text
+                const fullReport = generateFullReport(missingInFirst, missingInSecond, rows1.length, rows2.length);
+
+                // Update download links
+                document.getElementById('downloadMissingFirst').href = createDownloadUrl(missingInFirstCsv, 'text/csv');
+                document.getElementById('downloadMissingSecond').href = createDownloadUrl(missingInSecondCsv, 'text/csv');
+                document.getElementById('downloadFullReport').href = createDownloadUrl(fullReport, 'text/csv');
+
+            } catch (error) {
+                console.error('Error comparing files:', error);
+                alert('Error comparing files. Please check the console for details.');
+            }
+        }
+
+        function convertToCSV(rows) {
+            if (rows.length === 0) return '';
+            const headers = [
+                'Property ID',
+                '1map NAD ID',
+                'Site',
+                'lst_mod_by',
+                'lst_mod_dt',
+                'date_status_changed',
+                'Latitude',
+                'Longitude'
+            ];
+            const csvRows = [headers.join(',')];
+            
+            for (const row of rows) {
+                const values = headers.map(header => {
+                    const value = row[header]?.toString() || '';
+                    return `"${value.replace(/"/g, '""')}"`;
+                });
+                csvRows.push(values.join(','));
+            }
+            
+            return csvRows.join('\n');
+        }
+
+        function createDownloadUrl(content, type = 'text/csv') {
+            const blob = new Blob([content], { type: type });
+            return URL.createObjectURL(blob);
+        }
+
+        function generateFullReport(missingInFirst, missingInSecond, totalRows1, totalRows2) {
+            // Create CSV headers
+            const headers = [
+                'File',
+                'Property ID',
+                '1map NAD ID',
+                'Site',
+                'lst_mod_by',
+                'lst_mod_dt',
+                'date_status_changed',
+                'Latitude',
+                'Longitude',
+                'Status',
+                'Explanation'
+            ].join(',');
+
+            const rows = [];
+            
+            // Add summary as first rows
+            rows.push(`"Summary","","","","","","","","","",""`)
+            rows.push(`"Total rows in first file","${totalRows1}","","","","","","","","",""`)
+            rows.push(`"Total rows in second file","${totalRows2}","","","","","","","","",""`)
+            rows.push(`"Rows missing in second file","${missingInSecond.length}","","","","","","","","",""`)
+            rows.push(`"Rows missing in first file","${missingInFirst.length}","","","","","","","","",""`)
+            rows.push(`"","","","","","","","","","",""`) // Empty row for spacing
+            
+            // Add missing in second file
+            missingInSecond.forEach(item => {
+                const row = [
+                    'Missing in Second',
+                    item.row['Property ID'] || '',
+                    item.row['1map NAD ID'] || '',
+                    item.row['Site'] || '',
+                    item.row['lst_mod_by'] || '',
+                    item.row['lst_mod_dt'] || '',
+                    item.row['date_status_changed'] || '',
+                    item.row['Latitude'] || '',
+                    item.row['Longitude'] || '',
+                    'Missing',
+                    item.explanation.replace(/\n/g, ' ') || ''
+                ].map(value => `"${value.toString().replace(/"/g, '""')}"`);
+                rows.push(row.join(','));
+            });
+            
+            // Add missing in first file
+            missingInFirst.forEach(item => {
+                const row = [
+                    'Missing in First',
+                    item.row['Property ID'] || '',
+                    item.row['1map NAD ID'] || '',
+                    item.row['Site'] || '',
+                    item.row['lst_mod_by'] || '',
+                    item.row['lst_mod_dt'] || '',
+                    item.row['date_status_changed'] || '',
+                    item.row['Latitude'] || '',
+                    item.row['Longitude'] || '',
+                    'Missing',
+                    item.explanation.replace(/\n/g, ' ') || ''
+                ].map(value => `"${value.toString().replace(/"/g, '""')}"`);
+                rows.push(row.join(','));
+            });
+            
+            return [headers, ...rows].join('\n');
+        }
+    </script>
+</body>
+</html> 
